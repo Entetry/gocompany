@@ -1,7 +1,2 @@
-# gocompany
-# gocompany
-# gocompany
-# gocompany
-# gocompany
-# gocompany
-# gocompany
+# gotest
+go trainy proj
