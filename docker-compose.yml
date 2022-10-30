@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  app:
+    depends_on:
+      - db
+      - mongo
+      - redis
+    build: ./
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    networks:
+      - mynetwork
+    restart: on-failure
+    env_file:
+      - .env
+    environment:
+      - APP_PORT=${APP_PORT}
+      - CONNECTION_STRING=${CONNECTION_STRING}
+      - REDIS_HOST=redis
+  db:
+    container_name: postgres_db
+    image: postgres:latest
+    restart: always
+    volumes:
+      - my-data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    networks:
+      - mynetwork
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+  flyway:
+    image: flyway/flyway:latest
+    environment:
+      - FLYWAY_USER=${POSTGRES_USER}
+      - FLYWAY_PASSWORD=${POSTGRES_PASSWORD}
+      - FLYWAY_URL=jdbc:postgresql://postgres_db:${POSTGRES_PORT}/${POSTGRES_DB}
+    command: -locations=filesystem:/flyway/sql migrate
+    volumes:
+      - $PWD/migrations:/flyway/sql
+    depends_on:
+      - db
+    networks:
+      - mynetwork
+  mongo:
+    image: mongo:latest
+    hostname: mongo
+    ports:
+      - "${MONGO_PORT}:${MONGO_PORT}"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - my-data:/data/db
+    networks:
+      - mynetwork
+  redis:
+    image: "redis:7-alpine"
+    hostname: redis
+    ports:
+      - "6379:6379"
+    command: sh -c "redis-server --appendonly yes"
+    volumes:
+      - my-data:/data/redis
+    networks:
+      - mynetwork
+volumes:
+  my-data:
+    external: true
+    name: my-data
+
+networks:
+  mynetwork:
+    driver: bridge
