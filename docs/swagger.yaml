@@ -1,0 +1,276 @@
+basePath: /api
+definitions:
+  handlers.addCompanyRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  handlers.logoutRequest:
+    properties:
+      refreshToken:
+        type: string
+    required:
+    - refreshToken
+    type: object
+  handlers.refreshTokenRequest:
+    properties:
+      refreshToken:
+        type: string
+    required:
+    - refreshToken
+    type: object
+  handlers.signInRequest:
+    properties:
+      password:
+        maxLength: 60
+        minLength: 5
+        type: string
+      username:
+        maxLength: 32
+        minLength: 3
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  handlers.signUpRequest:
+    properties:
+      email:
+        type: string
+      password:
+        maxLength: 60
+        minLength: 5
+        type: string
+      username:
+        maxLength: 32
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  handlers.tokenResponse:
+    properties:
+      accessToken:
+        type: string
+      refreshToken:
+        type: string
+    type: object
+  handlers.updateCompanyRequest:
+    properties:
+      name:
+        type: string
+      uuid:
+        type: string
+    required:
+    - name
+    - uuid
+    type: object
+  model.Company:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+info:
+  contact:
+    email: antonklintsevich@gmail.com
+    name: API Support
+  description: Swagger API for Golang Project gotest.
+  termsOfService: http://swagger.io/terms/
+  title: Gotest Swagger API
+  version: "1.0"
+paths:
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: refresh token
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.logoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: log out from session
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: refreshToken
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.refreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.tokenResponse'
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal Server Error
+      summary: update refresh token
+      tags:
+      - auth
+  /auth/sign-in:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: username and password
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.signInRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: AccessToken  string and RefreshToken string
+          schema:
+            $ref: '#/definitions/handlers.tokenResponse'
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: sign in into account
+      tags:
+      - auth
+  /auth/sign-up:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: username, email and password
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.signUpRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: sign up into account
+      tags:
+      - auth
+  /company:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Company'
+            type: array
+        "400":
+          description: Bad Request
+      summary: Retrieves all companies
+    post:
+      parameters:
+      - description: name
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.addCompanyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: create company
+  /company/{id}:
+    delete:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+      summary: delete company based on given ID
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Company'
+        "400":
+          description: Bad Request
+      summary: Retrieves company based on given ID
+  /company/logo:
+    post:
+      responses:
+        "200":
+          description: OK
+        "500":
+          description: Internal Server Error
+    put:
+      parameters:
+      - description: uuid
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.updateCompanyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: update company
+  /company/logo/{id}:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: Retrieves company logo based on given company ID
+swagger: "2.0"
