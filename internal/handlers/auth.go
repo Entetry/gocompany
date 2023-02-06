@@ -7,8 +7,8 @@ import (
 	"github.com/labstack/echo/v4"
 	log "github.com/sirupsen/logrus"
 
-	"entetry/gotest/internal/model"
-	"entetry/gotest/internal/service"
+	"github.com/Entetry/gocompany/internal/model"
+	"github.com/Entetry/gocompany/internal/service"
 )
 
 // Auth handler struct

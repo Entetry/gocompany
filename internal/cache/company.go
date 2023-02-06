@@ -7,8 +7,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"entetry/gotest/internal/model"
+	"github.com/Entetry/gocompany/internal/model"
 )
+
+type Cache interface {
+	Update(ID uuid.UUID, name string)
+	Read(id uuid.UUID) (*model.Company, error)
+	Delete(id uuid.UUID)
+}
 
 // LocalCache cache company struct
 type LocalCache struct {

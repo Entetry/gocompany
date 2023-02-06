@@ -10,8 +10,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 
-	"entetry/gotest/internal/config"
-	"entetry/gotest/internal/model"
+	"github.com/Entetry/gocompany/internal/config"
+	"github.com/Entetry/gocompany/internal/model"
 )
 
 const (

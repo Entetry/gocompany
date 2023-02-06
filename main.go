@@ -4,6 +4,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/Entetry/gocompany/internal/repository"
+	log "github.com/sirupsen/logrus"
 	"net"
 	"os"
 	"os/signal"
@@ -15,19 +17,18 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/labstack/echo/v4"
-	log "github.com/sirupsen/logrus"
+
 	echoSwagger "github.com/swaggo/echo-swagger"
 
-	_ "entetry/gotest/docs"
-	"entetry/gotest/internal/cache"
-	"entetry/gotest/internal/config"
-	"entetry/gotest/internal/consumer"
-	"entetry/gotest/internal/event"
-	"entetry/gotest/internal/handlers"
-	"entetry/gotest/internal/middleware"
-	"entetry/gotest/internal/producer"
-	"entetry/gotest/internal/repository/postgre"
-	"entetry/gotest/internal/service"
+	_ "github.com/Entetry/gocompany/docs"
+	"github.com/Entetry/gocompany/internal/cache"
+	"github.com/Entetry/gocompany/internal/config"
+	"github.com/Entetry/gocompany/internal/consumer"
+	"github.com/Entetry/gocompany/internal/event"
+	"github.com/Entetry/gocompany/internal/handlers"
+	"github.com/Entetry/gocompany/internal/middleware"
+	"github.com/Entetry/gocompany/internal/producer"
+	"github.com/Entetry/gocompany/internal/service"
 )
 
 // @title          Gotest Swagger API
@@ -67,10 +68,10 @@ func main() {
 		}
 	}(redisClient)
 
-	refreshSessionRepository := postgre.NewRefresh(db)
+	refreshSessionRepository := repository.NewRefresh(db)
 	refreshSessionService := service.NewRefreshSession(refreshSessionRepository)
 
-	userRepository := postgre.NewUserRepository(db)
+	userRepository := repository.NewUserRepository(db)
 	userService := service.NewUserService(userRepository)
 
 	authService := service.NewAuthService(userService, refreshSessionService, jwtCfg)
@@ -79,12 +80,12 @@ func main() {
 	redisProducer := producer.NewRedisCompanyProducer(redisClient)
 	cacheCompany := cache.NewLocalCache()
 
-	companyRepository := postgre.NewCompanyRepository(db)
-	logoRepository := postgre.NewLogoRepository(db)
+	companyRepository := repository.NewCompanyRepository(db)
+	logoRepository := repository.NewLogoRepository(db)
 	companyService := service.NewCompany(companyRepository, logoRepository, cacheCompany, redisProducer)
 	companyHandler := handlers.NewCompany(companyService)
 
-	go consumeCompanies(redisClient, cacheCompany)
+	go ConsumeCompanies(redisClient, cacheCompany)
 
 	e := echo.New()
 
@@ -130,7 +131,7 @@ func main() {
 	}
 }
 
-func consumeCompanies(redisClient *redis.Client, localCache *cache.LocalCache) {
+func ConsumeCompanies(redisClient *redis.Client, localCache *cache.LocalCache) {
 	redisCompanyConsumer := consumer.NewRedisCompanyConsumer(redisClient, fmt.Sprintf("%d000-0", time.Now().Unix()))
 	go redisCompanyConsumer.Consume(context.Background(), func(id uuid.UUID, action, name string) {
 		switch action {

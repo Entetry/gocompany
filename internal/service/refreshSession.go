@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
+	"github.com/Entetry/gocompany/internal/repository"
 
-	"entetry/gotest/internal/model"
-	"entetry/gotest/internal/repository/postgre"
+	"github.com/Entetry/gocompany/internal/model"
 )
 
 const (
@@ -13,11 +13,11 @@ const (
 
 // RefreshSession Refresh Session service struct
 type RefreshSession struct {
-	refreshSessionRepository postgre.RefreshSessionRepository
+	refreshSessionRepository repository.RefreshSessionRepository
 }
 
 // NewRefreshSession creates new Refresh Session service
-func NewRefreshSession(refreshSessionRepository postgre.RefreshSessionRepository) *RefreshSession {
+func NewRefreshSession(refreshSessionRepository repository.RefreshSessionRepository) *RefreshSession {
 	return &RefreshSession{
 		refreshSessionRepository: refreshSessionRepository}
 }
