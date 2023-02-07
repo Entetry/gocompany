@@ -4,7 +4,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"entetry/gotest/internal/model"
+	"github.com/Entetry/gocompany/internal/model"
 )
 
 // NewJwtMiddleware creates jwt middleware object

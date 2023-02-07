@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/Entetry/gocompany/internal/repository"
 	"io"
 	"mime/multipart"
 	"os"
@@ -11,11 +12,10 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 
-	"entetry/gotest/internal/cache"
-	"entetry/gotest/internal/event"
-	"entetry/gotest/internal/model"
-	"entetry/gotest/internal/producer"
-	"entetry/gotest/internal/repository/postgre"
+	"github.com/Entetry/gocompany/internal/cache"
+	"github.com/Entetry/gocompany/internal/event"
+	"github.com/Entetry/gocompany/internal/model"
+	"github.com/Entetry/gocompany/internal/producer"
 )
 
 const (
@@ -24,18 +24,28 @@ const (
 	imageExt                  = ".jpeg"
 )
 
+type CompanyService interface {
+	GetAll(ctx context.Context) ([]*model.Company, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*model.Company, error)
+	Create(ctx context.Context, company *model.Company) (uuid.UUID, error)
+	Update(ctx context.Context, company *model.Company) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	AddLogo(ctx context.Context, companyID string, file *multipart.FileHeader) error
+	GetLogo(ctx context.Context, companyID uuid.UUID) (string, error)
+}
+
 // Company service company struct
 type Company struct {
-	companyRepository postgre.CompanyRepository
-	logoRepository    postgre.LogoRepository
-	cache             *cache.LocalCache
+	companyRepository repository.CompanyRepository
+	logoRepository    repository.LogoRepository
+	cache             cache.Cache
 	producer          producer.Company
 }
 
 // NewCompany creates new Company service
 func NewCompany(
-	companyRepository postgre.CompanyRepository, logoRepository postgre.LogoRepository,
-	localCache *cache.LocalCache, redisProducer producer.Company) *Company {
+	companyRepository repository.CompanyRepository, logoRepository repository.LogoRepository,
+	localCache cache.Cache, redisProducer producer.Company) *Company {
 	return &Company{
 		companyRepository: companyRepository, logoRepository: logoRepository, cache: localCache, producer: redisProducer}
 }

@@ -1,14 +1,15 @@
 // Package postgre contains postgre repository structs
-package postgre
+package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
+	"github.com/Entetry/gocompany/internal/model"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-
-	"entetry/gotest/internal/model"
+	"github.com/labstack/echo/v4"
 )
 
 // CompanyRepository interface for company repository
@@ -60,6 +61,11 @@ func (c *Company) GetAll(ctx context.Context) ([]*model.Company, error) {
 func (c *Company) GetOne(ctx context.Context, id uuid.UUID) (*model.Company, error) {
 	var company model.Company
 	err := c.db.QueryRow(ctx, "SELECT id, name FROM company WHERE id = $1", id).Scan(&company.ID, &company.Name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, echo.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
 	return &company, err
 }
 

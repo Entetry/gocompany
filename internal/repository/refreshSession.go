@@ -1,4 +1,4 @@
-package postgre
+package repository
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 	log "github.com/sirupsen/logrus"
 
-	"entetry/gotest/internal/model"
+	"github.com/Entetry/gocompany/internal/model"
 )
 
 // RefreshSessionRepository refresh session repository interface

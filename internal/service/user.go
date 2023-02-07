@@ -3,22 +3,22 @@ package service
 
 import (
 	"context"
+	"github.com/Entetry/gocompany/internal/repository"
 
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 
-	"entetry/gotest/internal/model"
-	"entetry/gotest/internal/repository/postgre"
+	"github.com/Entetry/gocompany/internal/model"
 )
 
 // User service struct
 type User struct {
-	userRepository postgre.UserRepository
+	userRepository repository.UserRepository
 }
 
 // NewUserService creates new User service
-func NewUserService(userRepository postgre.UserRepository) *User {
+func NewUserService(userRepository repository.UserRepository) *User {
 	return &User{
 		userRepository: userRepository}
 }

@@ -7,13 +7,13 @@ import (
 	"github.com/labstack/echo/v4"
 	log "github.com/sirupsen/logrus"
 
-	"entetry/gotest/internal/model"
-	"entetry/gotest/internal/service"
+	"github.com/Entetry/gocompany/internal/model"
+	"github.com/Entetry/gocompany/internal/service"
 )
 
 // Company handler company struct
 type Company struct {
-	companyService *service.Company
+	companyService service.CompanyService
 }
 
 // NewCompany creates new company handler
@@ -30,7 +30,7 @@ func NewCompany(companyService *service.Company) *Company {
 func (c *Company) GetAll(ctx echo.Context) error {
 	companies, err := c.companyService.GetAll(ctx.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return ctx.JSON(http.StatusOK, companies)
 }
