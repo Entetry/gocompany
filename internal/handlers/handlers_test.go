@@ -27,7 +27,6 @@ var (
 	dbPool         *pgxpool.Pool
 	companyHandler *Company
 	e              *echo.Echo
-	port           = 42800
 )
 
 func TestMain(m *testing.M) {
@@ -96,26 +95,6 @@ func TestMain(m *testing.M) {
 	go ConsumeCompanies(redisClient, cacheCompany)
 	e = echo.New()
 	e.Validator = middleware.NewCustomValidator(validator.New())
-	company := e.Group("api/company")
-	company.POST("", companyHandler.Create)
-	company.GET("", companyHandler.GetAll)
-	company.GET("/:id", companyHandler.GetByID)
-	company.PUT("", companyHandler.Update)
-	company.DELETE("/:id", companyHandler.Delete)
-	company.POST("/logo", companyHandler.AddLogo)
-	company.GET("/logo/:id", companyHandler.GetLogoByCompanyID)
-	go func() {
-		err = e.Start(fmt.Sprintf(":%d", port))
-		if err != nil {
-			log.Fatal(err)
-		}
-	}()
-	defer func(e *echo.Echo, ctx context.Context) {
-		err = e.Shutdown(ctx)
-		if err != nil {
-			log.Errorf("Error while stopping server \n %v", err)
-		}
-	}(e, ctx)
 	code := m.Run()
 	resources := []*dockertest.Resource{pgResoursce, redisRsc}
 	for _, resource := range resources {

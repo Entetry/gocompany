@@ -28,7 +28,6 @@ func TestCompany_Create(t *testing.T) {
 	var buf bytes.Buffer
 	err := json.NewEncoder(&buf).Encode(addCompany)
 	require.NoError(t, err, "failed to marhall go struct")
-
 	req := httptest.NewRequest(http.MethodPost, "/", &buf)
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
