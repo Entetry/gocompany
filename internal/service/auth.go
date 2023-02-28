@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/Entetry/gocompany/internal/repository"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -48,7 +50,7 @@ func NewAuthService(userService *User, refreshSession *RefreshSession, cfg *conf
 func (a *Auth) SignIn(ctx context.Context, username, password string, tokenParam *model.TokenParam) (refreshToken, accessToken string, err error) {
 	user, err := a.attemptLogin(ctx, username, password)
 	if err != nil {
-		return "", "", fmt.Errorf(wrongPassword)
+		return "", "", err
 	}
 	return a.generateTokens(ctx, user.ID.String(), tokenParam)
 }
@@ -56,7 +58,7 @@ func (a *Auth) SignIn(ctx context.Context, username, password string, tokenParam
 // SignUp  sign up new user
 func (a *Auth) SignUp(ctx context.Context, username, password, email string) error {
 	user, err := a.userService.GetByUsername(ctx, username)
-	if err != nil {
+	if !errors.Is(repository.ErrNotFound, err) {
 		return err
 	}
 	if user != nil {

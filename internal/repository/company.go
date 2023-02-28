@@ -9,13 +9,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/labstack/echo/v4"
 )
 
 // CompanyRepository interface for company repository
 type CompanyRepository interface {
-	Create(ctx context.Context, company *model.Company) (uuid.UUID, error)
-	Update(ctx context.Context, company *model.Company) error
+	Create(ctx context.Context, name string) (uuid.UUID, error)
+	Update(ctx context.Context, uuid uuid.UUID, name string) error
 	Delete(ctx context.Context, uuid uuid.UUID) error
 	GetOne(ctx context.Context, uuid uuid.UUID) (*model.Company, error)
 	GetAll(ctx context.Context) ([]*model.Company, error)
@@ -36,6 +35,9 @@ func NewCompanyRepository(db *pgxpool.Pool) *Company {
 // GetAll get all companies from db
 func (c *Company) GetAll(ctx context.Context) ([]*model.Company, error) {
 	rows, err := c.db.Query(ctx, `SELECT id, name FROM company`)
+	if errors.Is(pgx.ErrNoRows, err) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("query: %v", err)
 	}
@@ -62,7 +64,7 @@ func (c *Company) GetOne(ctx context.Context, id uuid.UUID) (*model.Company, err
 	var company model.Company
 	err := c.db.QueryRow(ctx, "SELECT id, name FROM company WHERE id = $1", id).Scan(&company.ID, &company.Name)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, echo.ErrNotFound
+		return nil, ErrNotFound
 	} else if err != nil {
 		return nil, err
 	}
@@ -70,20 +72,20 @@ func (c *Company) GetOne(ctx context.Context, id uuid.UUID) (*model.Company, err
 }
 
 // Create creates New Company record in db
-func (c *Company) Create(ctx context.Context, company *model.Company) (uuid.UUID, error) {
-	company.ID = uuid.New()
+func (c *Company) Create(ctx context.Context, name string) (uuid.UUID, error) {
+	id := uuid.New()
 	_, err := c.db.Exec(ctx, "INSERT INTO company(id, name) VALUES ($1, $2) RETURNING id, name;",
-		company.ID, company.Name)
+		id, name)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("cannot create Company: %v", err)
 	}
-	return company.ID, err
+	return id, err
 }
 
 // Update updates company in db
-func (c *Company) Update(ctx context.Context, company *model.Company) error {
+func (c *Company) Update(ctx context.Context, id uuid.UUID, name string) error {
 	_, err := c.db.Exec(ctx, "UPDATE company SET name = $2 WHERE id=$1 RETURNING id, name;",
-		company.ID, company.Name)
+		id, name)
 	if err != nil {
 		return fmt.Errorf("cannot update Company: %v", err)
 	}

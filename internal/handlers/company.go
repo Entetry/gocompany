@@ -1,18 +1,25 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
+	"github.com/Entetry/gocompany/internal/model"
+	"github.com/Entetry/gocompany/protocol/companyService"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"io"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/Entetry/gocompany/internal/model"
 	"github.com/Entetry/gocompany/internal/service"
 )
 
 // Company handler company struct
 type Company struct {
+	companyService.UnimplementedCompanyServiceServer
 	companyService service.CompanyService
 }
 
@@ -21,127 +28,110 @@ func NewCompany(companyService *service.Company) *Company {
 	return &Company{companyService: companyService}
 }
 
-// GetAll godoc
-// @Summary Retrieves all companies
-// @Produce json
-// @Success 200 {array} model.Company
-// @Failure 400
-// @Router  /company [get]
-func (c *Company) GetAll(ctx echo.Context) error {
-	companies, err := c.companyService.GetAll(ctx.Request().Context())
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+// GetAll Retrieves all companies
+func (c *Company) GetAll(ctx context.Context, request *companyService.GetAllRequest) (*companyService.GetAllResponse, error) {
+	if err := request.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "input arguments are invalid")
 	}
-	return ctx.JSON(http.StatusOK, companies)
+
+	companies, err := c.companyService.GetAll(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return toGetAllResponse(companies), nil
 }
 
-// GetByID godoc
-// @Summary Retrieves company based on given ID
-// @Produce json
-// @Success 200 {object} model.Company
-// @Failure 400
-// @Router  /company/{id} [get]
-func (c *Company) GetByID(ctx echo.Context) error {
-	id, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest)
+func toGetAllResponse(companies []*model.Company) *companyService.GetAllResponse {
+	cmps := make([]*companyService.GetCompanyResponse, 0, len(companies))
+	for _, c := range companies {
+		cmps = append(cmps, &companyService.GetCompanyResponse{
+			Uuid: c.ID.String(),
+			Name: c.Name,
+		})
 	}
-	company, err := c.companyService.GetByID(ctx.Request().Context(), id)
-
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest)
+	return &companyService.GetAllResponse{
+		Companies: cmps,
 	}
-
-	return ctx.JSON(http.StatusOK, company)
 }
 
-// Create godoc
-// @Summary create company
-// @Produce json
-// @Param   input body addCompanyRequest true "name"
-// @Success 200
-// @Failure 400
-// @Failure 500
-// @Router  /company [post]
-func (c *Company) Create(ctx echo.Context) error {
-	request := new(addCompanyRequest)
-	err := ctx.Bind(request)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// GetByID Retrieves company based on given ID
+func (c *Company) GetByID(ctx context.Context, request *companyService.GetCompanyRequest) (*companyService.GetCompanyResponse, error) {
+	if err := request.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "input arguments are invalid")
 	}
 
-	err = ctx.Validate(request)
+	id, err := uuid.Parse(request.Uuid)
 	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	company := &model.Company{Name: request.Name}
-	id, err := c.companyService.Create(ctx.Request().Context(), company)
+
+	company, err := c.companyService.GetByID(ctx, id)
+
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError)
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return ctx.JSON(http.StatusOK, id)
+
+	if company == nil {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+
+	return &companyService.GetCompanyResponse{
+		Uuid: company.ID.String(),
+		Name: company.Name,
+	}, nil
 }
 
-// Update godoc
-// @Summary update company
-// @Produce json
-// @Param   input body updateCompanyRequest true "uuid" "name"
-// @Success 200
-// @Failure 400
-// @Failure 500
-// @Router  /company [put]
-func (c *Company) Update(ctx echo.Context) error {
-	request := new(updateCompanyRequest)
-	err := ctx.Bind(request)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// Create create company
+func (c *Company) Create(ctx context.Context, request *companyService.CreateCompanyRequest) (*companyService.CreateCompanyResponse, error) {
+	if err := request.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "input arguments are invalid")
 	}
 
-	err = ctx.Validate(request)
+	id, err := c.companyService.Create(ctx, request.Name)
 	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-
-	company := &model.Company{ID: request.UUID, Name: request.Name}
-	err = c.companyService.Update(ctx.Request().Context(), company)
-
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError)
-	}
-
-	return ctx.JSON(http.StatusOK, "Company updated")
+	return &companyService.CreateCompanyResponse{
+		Uuid: id.String(),
+	}, nil
 }
 
-// Delete godoc
-// @Summary delete company based on given ID
-// @Produce json
-// @Success 200
-// @Failure 400
-// @Router  /company/{id} [delete]
-func (c *Company) Delete(ctx echo.Context) error {
-	id, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest)
+// Update godoc company
+func (c *Company) Update(ctx context.Context, request *companyService.UpdateCompanyRequest) (*companyService.UpdateCompanyResponse, error) {
+	if err := request.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "input arguments are invalid")
 	}
-	err = c.companyService.Delete(ctx.Request().Context(), id)
+	id, err := uuid.Parse(request.Uuid)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest)
+	if err = c.companyService.Update(ctx, id, request.Name); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return ctx.JSON(http.StatusOK, "Company deleted")
+
+	return &companyService.UpdateCompanyResponse{}, nil
 }
 
-// GetLogoByCompanyID godoc
-// @Summary Retrieves company logo based on given company ID
-// @Produce json
-// @Success 200
-// @Failure 400
-// @Failure 500
-// @Router  /company/logo/{id} [get]
+// Delete company based on given ID
+func (c *Company) Delete(ctx context.Context, request *companyService.DeleteCompanyRequest) (*companyService.DeleteCompanyResponse, error) {
+	if err := request.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "input arguments are invalid")
+	}
+
+	id, err := uuid.Parse(request.Uuid)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	if err = c.companyService.Delete(ctx, id); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &companyService.DeleteCompanyResponse{}, nil
+}
+
+// GetLogoByCompanyID Retrieves company logo based on given company ID
 func (c *Company) GetLogoByCompanyID(ctx echo.Context) error {
 	id, err := uuid.Parse(ctx.Param("id"))
 	if err != nil {
@@ -159,23 +149,27 @@ func (c *Company) GetLogoByCompanyID(ctx echo.Context) error {
 	return ctx.File(logo)
 }
 
-// AddLogo godoc
-// @Summary add new company logo
-// @Produce mpfd
-// @Success 200
-// @Failure 500
-// @Router  /company/logo [post]
-func (c *Company) AddLogo(ctx echo.Context) error {
-	companyID := ctx.FormValue("companyID")
-	file, err := ctx.FormFile("image")
+// AddLogo add new company logo
+func (c *Company) AddLogo(stream companyService.CompanyService_AddLogoServer) error {
+	var buff bytes.Buffer
+	req, err := stream.Recv()
 	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return status.Error(codes.Internal, err.Error())
 	}
-	err = c.companyService.AddLogo(ctx.Request().Context(), companyID, file)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	companyId := req.GetCompanyID()
+	for {
+		req, err = stream.Recv()
+		if err == io.EOF {
+			if err = c.companyService.AddLogo(stream.Context(), companyId, buff.Bytes()); err != nil {
+				return status.Error(codes.Internal, err.Error())
+			}
+			return stream.SendAndClose(&companyService.AddCompanyLogoResponse{})
+		}
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		if _, err := buff.Write(req.GetImageChunk()); err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
 	}
-	return ctx.JSON(http.StatusOK, "Logo has been added")
 }

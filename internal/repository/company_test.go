@@ -25,12 +25,11 @@ func TestCompany_Create(t *testing.T) {
 		require.NoError(t, err)
 	}()
 	t.Log("Given the need to test create company.")
-	id, err := companyRepository.Create(ctx, &company)
+	id, err := companyRepository.Create(ctx, company.Name)
 	require.NoError(t, err, "tested create function error")
 	one, err := companyRepository.GetOne(ctx, id)
 	require.NoError(t, err, "tested get function error")
 	require.Equal(t, company.Name, one.Name)
-
 }
 
 func TestCompany_Delete(t *testing.T) {
@@ -41,7 +40,7 @@ func TestCompany_Delete(t *testing.T) {
 		require.NoError(t, err)
 	}()
 	t.Log("Given the need to test delete company.")
-	id, err := companyRepository.Create(ctx, &company)
+	id, err := companyRepository.Create(ctx, company.Name)
 	require.NoError(t, err, "tested create function error")
 	err = companyRepository.Delete(ctx, id)
 	require.NoError(t, err, "delete function error")
@@ -58,13 +57,13 @@ func TestCompany_Update(t *testing.T) {
 	}()
 	t.Log("Given the need to test update company.")
 	t.Log("Given the need to test delete company.")
-	id, err := companyRepository.Create(ctx, &company)
+	id, err := companyRepository.Create(ctx, company.Name)
 	require.NoError(t, err, "tested create function error")
 	updatedCompany := model.Company{
 		ID:   id,
 		Name: "Amazon",
 	}
-	err = companyRepository.Update(ctx, &updatedCompany)
+	err = companyRepository.Update(ctx, updatedCompany.ID, updatedCompany.Name)
 	require.NoError(t, err, "tested update function error")
 	c, err := companyRepository.GetOne(ctx, updatedCompany.ID)
 	require.NoError(t, err, "get function error")

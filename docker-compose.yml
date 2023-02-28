@@ -4,7 +4,6 @@ services:
   app:
     depends_on:
       - db
-      - mongo
       - redis
     build: ./
     ports:
@@ -47,18 +46,6 @@ services:
       - db
     networks:
       - mynetwork
-  mongo:
-    image: mongo:latest
-    hostname: mongo
-    ports:
-      - "${MONGO_PORT}:${MONGO_PORT}"
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=password
-    volumes:
-      - my-data:/data/db
-    networks:
-      - mynetwork
   redis:
     image: "redis:7-alpine"
     hostname: redis
@@ -71,7 +58,6 @@ services:
       - mynetwork
 volumes:
   my-data:
-    external: true
     name: my-data
 
 networks:

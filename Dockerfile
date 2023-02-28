@@ -14,7 +14,7 @@ FROM alpine:latest
 
 WORKDIR /
 
-COPY --from=build /stable-listener /
+COPY --from=build /company /
 
 EXPOSE ${APP_PORT}
 
