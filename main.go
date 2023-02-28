@@ -4,21 +4,17 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/Entetry/gocompany/internal/middleware"
 	"github.com/Entetry/gocompany/internal/repository"
+	"github.com/Entetry/gocompany/protocol/companyService"
+	"github.com/go-redis/redis/v9"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/go-playground/validator/v10"
-	"github.com/go-redis/redis/v9"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/labstack/echo/v4"
-
-	echoSwagger "github.com/swaggo/echo-swagger"
 
 	_ "github.com/Entetry/gocompany/docs"
 	"github.com/Entetry/gocompany/internal/cache"
@@ -26,20 +22,12 @@ import (
 	"github.com/Entetry/gocompany/internal/consumer"
 	"github.com/Entetry/gocompany/internal/event"
 	"github.com/Entetry/gocompany/internal/handlers"
-	"github.com/Entetry/gocompany/internal/middleware"
 	"github.com/Entetry/gocompany/internal/producer"
 	"github.com/Entetry/gocompany/internal/service"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-// @title          Gotest Swagger API
-// @version        1.0
-// @description    Swagger API for Golang Project gotest.
-// @termsOfService http://swagger.io/terms/
-
-// @contact.name  API Support
-// @contact.email antonklintsevich@gmail.com
-
-// @BasePath /api
 func main() {
 	cfg, err := config.New()
 	if err != nil {
@@ -82,52 +70,29 @@ func main() {
 
 	companyRepository := repository.NewCompanyRepository(db)
 	logoRepository := repository.NewLogoRepository(db)
-	companyService := service.NewCompany(companyRepository, logoRepository, cacheCompany, redisProducer)
-	companyHandler := handlers.NewCompany(companyService)
+	cmpService := service.NewCompany(companyRepository, logoRepository, cacheCompany, redisProducer)
+	cmpHandler := handlers.NewCompany(cmpService)
 
 	go ConsumeCompanies(redisClient, cacheCompany)
-
-	e := echo.New()
-
-	e.Validator = middleware.NewCustomValidator(validator.New())
-	auth := e.Group("api/auth")
-	auth.POST("/refresh-tokens", authHandler.Refresh)
-	auth.POST("/sign-in", authHandler.SignIn)
-	auth.POST("/sign-up", authHandler.SignUp)
-	auth.POST("/logout", authHandler.Logout)
-
-	company := e.Group("api/company")
-	company.Use(middleware.NewJwtMiddleware(jwtCfg.AccessTokenKey))
-	company.POST("", companyHandler.Create)
-	company.GET("", companyHandler.GetAll)
-	company.GET("/:id", companyHandler.GetByID)
-	company.PUT("", companyHandler.Update)
-	company.DELETE("/:id", companyHandler.Delete)
-	company.POST("/logo", companyHandler.AddLogo)
-	company.GET("/logo/:id", companyHandler.GetLogoByCompanyID)
-
-	e.GET("/swagger/*", echoSwagger.WrapHandler)
-
-	err = e.Start(fmt.Sprintf(":%d", cfg.Port))
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Info("Server started on ", cfg.Port)
+	jwtInterceptor := middleware.NewAuthInterceptor(jwtCfg)
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(jwtInterceptor.Unary), grpc.StreamInterceptor(jwtInterceptor.StreamInterceptor))
+	companyService.RegisterCompanyServiceServer(grpcServer, cmpHandler)
+	companyService.RegisterAuthGRPCServiceServer(grpcServer, authHandler)
 	go func() {
 		<-sigChan
 		cancel()
-		err = e.Shutdown(ctx)
+		grpcServer.GracefulStop()
 		if err != nil {
 			log.Errorf("can't stop server gracefully %v", err)
 		}
 	}()
+	log.Info("grpc Server started on ", cfg.Port)
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = e.Server.Serve(listener)
-	if err != nil {
-		log.Fatal(err)
+	if err := grpcServer.Serve(listener); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }
 

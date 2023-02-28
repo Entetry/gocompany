@@ -1,11 +1,13 @@
 package handlers
 
 import (
-	"errors"
-	"net/http"
-
-	"github.com/labstack/echo/v4"
+	"context"
+	"fmt"
+	"github.com/Entetry/gocompany/protocol/companyService"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/Entetry/gocompany/internal/model"
 	"github.com/Entetry/gocompany/internal/service"
@@ -13,6 +15,7 @@ import (
 
 // Auth handler struct
 type Auth struct {
+	companyService.UnsafeAuthGRPCServiceServer
 	authService *service.Auth
 }
 
@@ -21,168 +24,107 @@ func NewAuth(authService *service.Auth) *Auth {
 	return &Auth{authService: authService}
 }
 
-// SignIn godoc
-// @Summary sign in into account
-// @Tags    auth
-// @Accept  json
-// @Produce json
-// @Param   input body     signInRequest true "username and password"
-// @Success 200   {object} tokenResponse "AccessToken  string and RefreshToken string"
-// @Failure 400
-// @Failure 500
-// @Router  /auth/sign-in [post]
-func (a *Auth) SignIn(ctx echo.Context) error {
-	request := new(signInRequest)
-	err := ctx.Bind(request)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// SignIn sign in into account
+func (a *Auth) SignIn(ctx context.Context, request *companyService.SignInRequest) (*companyService.SignInResponse, error) {
+	if err := request.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "input arguments are invalid")
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "Metadata error")
 	}
 
-	err = ctx.Validate(request)
+	tokenParam, err := parseTokenParam(md)
 	if err != nil {
 		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	tokenParam, err := parseTokenParam(ctx.Request().Header)
+	refreshToken, accessToken, err := a.authService.SignIn(ctx, request.Username, request.Password, tokenParam)
 	if err != nil {
 		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	refreshToken, accessToken, err := a.authService.SignIn(ctx.Request().Context(), request.Username, request.Password, tokenParam)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	return ctx.JSON(http.StatusOK, &tokenResponse{
+	return &companyService.SignInResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-	})
+	}, nil
 }
 
-// SignUp godoc
-// @Summary sign up into account
-// @Tags    auth
-// @Accept  json
-// @Produce json
-// @Param   input body signUpRequest true "username, email and password"
-// @Success 200
-// @Failure 400
-// @Failure 500
-// @Router  /auth/sign-up [post]
-func (a *Auth) SignUp(ctx echo.Context) error {
-	request := new(signUpRequest)
-	err := ctx.Bind(request)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// SignUp sign up account
+func (a *Auth) SingUp(ctx context.Context, request *companyService.SignUpRequest) (*companyService.SignUpResponse, error) {
+	if err := request.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "input arguments are invalid")
 	}
 
-	err = ctx.Validate(request)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	if err := a.authService.SignUp(ctx, request.Username, request.Password, request.Email); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	err = a.authService.SignUp(ctx.Request().Context(), request.Username, request.Password, request.Email)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	return ctx.String(http.StatusCreated, "Registration completed successfully")
+	return &companyService.SignUpResponse{}, nil
 }
 
-// Refresh godoc
-// @Summary update refresh token
-// @Tags    auth
-// @Accept  json
-// @Produce json
-// @Param   input body     refreshTokenRequest true "refreshToken"
-// @Success 200   {object} tokenResponse       (accessToken and refreshToken)
-// @Failure 400
-// @Failure 401
-// @Failure 500
-// @Router  /auth/refresh [post]
-func (a *Auth) Refresh(ctx echo.Context) error {
-	request := new(refreshTokenRequest)
-	err := ctx.Bind(request)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// Refresh update refresh token
+func (a *Auth) Refresh(ctx context.Context, request *companyService.RefreshRequest) (*companyService.RefreshResponse, error) {
+	if err := request.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "input arguments are invalid")
 	}
 
-	err = ctx.Validate(request)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	}
-	tokenParam, err := parseTokenParam(ctx.Request().Header)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "Metadata error")
 	}
 
-	refreshToken, accessToken, err := a.authService.RefreshTokens(ctx.Request().Context(), request.RefreshToken, tokenParam)
+	tokenParam, err := parseTokenParam(md)
 	if err != nil {
 		log.Error(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	return ctx.JSON(http.StatusOK, &tokenResponse{
+	refreshToken, accessToken, err := a.authService.RefreshTokens(ctx, request.RefreshToken, tokenParam)
+	if err != nil {
+		log.Error(err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &companyService.RefreshResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-	})
+	}, nil
 }
 
-// Logout godoc
-// @Summary log out from session
-// @Tags    auth
-// @Accept  json
-// @Produce json
-// @Param   input body logoutRequest true "refresh token"
-// @Success 200
-// @Failure 400
-// @Failure 500
-// @Router  /auth/logout [post]
-func (a *Auth) Logout(ctx echo.Context) error {
-	request := new(logoutRequest)
-	err := ctx.Bind(request)
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+// Logout log out from session
+func (a *Auth) Logout(ctx context.Context, request *companyService.LogoutRequest) (*companyService.LogoutResponse, error) {
+	if err := request.Validate(); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "input arguments are invalid")
 	}
 
-	err = ctx.Validate(request)
-	if err != nil {
+	if err := a.authService.Logout(ctx, request.RefreshToken); err != nil {
 		log.Error(err)
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	err = a.authService.Logout(ctx.Request().Context(), request.RefreshToken)
-
-	if err != nil {
-		log.Error(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	return ctx.NoContent(http.StatusOK)
+	return &companyService.LogoutResponse{}, nil
 }
 
-func parseTokenParam(header http.Header) (*model.TokenParam, error) {
-	ua := header.Get("User-Agent")
-	fingerprint := header.Get("Fingerprint")
-	ip := header.Get("IP")
-
-	if ua == "" || fingerprint == "" || ip == "" {
-		return nil, errors.New("parameters of header missing")
+func parseTokenParam(metadata metadata.MD) (*model.TokenParam, error) {
+	ua := metadata.Get("User-Agent")
+	if len(ua) == 0 {
+		return nil, fmt.Errorf("no User-Agent provided")
+	}
+	fingerprint := metadata.Get("Fingerprint")
+	if len(fingerprint) == 0 {
+		return nil, fmt.Errorf("no Fingerprint provided")
+	}
+	ip := metadata.Get("IP")
+	if len(fingerprint) == 0 {
+		return nil, fmt.Errorf("no IP provided")
 	}
 
 	return &model.TokenParam{
-		UserAgent:   ua,
-		Fingerprint: fingerprint,
-		IP:          ip,
+		UserAgent:   ua[0],
+		Fingerprint: fingerprint[0],
+		IP:          ip[0],
 	}, nil
 }

@@ -6,27 +6,30 @@ import (
 	cache2 "github.com/Entetry/gocompany/internal/cache"
 	"github.com/Entetry/gocompany/internal/consumer"
 	"github.com/Entetry/gocompany/internal/event"
-	"github.com/Entetry/gocompany/internal/middleware"
 	"github.com/Entetry/gocompany/internal/producer"
 	"github.com/Entetry/gocompany/internal/repository"
 	"github.com/Entetry/gocompany/internal/service"
-	"github.com/go-playground/validator/v10"
+	"github.com/Entetry/gocompany/protocol/companyService"
 	"github.com/go-redis/redis/v9"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/ory/dockertest"
 	log "github.com/sirupsen/logrus"
-	"os"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"net"
 	"os/exec"
 	"testing"
 	"time"
 )
 
 var (
+	port           = 22800
 	dbPool         *pgxpool.Pool
 	companyHandler *Company
 	e              *echo.Echo
+	companyClient  companyService.CompanyServiceClient
 )
 
 func TestMain(m *testing.M) {
@@ -90,12 +93,44 @@ func TestMain(m *testing.M) {
 	logoRepository := repository.NewLogoRepository(dbPool)
 	cacheCompany := cache2.NewLocalCache()
 	redisProducer := producer.NewRedisCompanyProducer(redisClient)
-	companyService := service.NewCompany(companyRepository, logoRepository, cacheCompany, redisProducer)
-	companyHandler = NewCompany(companyService)
-	go ConsumeCompanies(redisClient, cacheCompany)
-	e = echo.New()
-	e.Validator = middleware.NewCustomValidator(validator.New())
-	code := m.Run()
+	cmpService := service.NewCompany(companyRepository, logoRepository, cacheCompany, redisProducer)
+	cmpHandler := NewCompany(cmpService)
+	go ConsumeCompanies(ctx, redisClient, cacheCompany)
+	grpcServer := grpc.NewServer()
+
+	go func() {
+		companyService.RegisterCompanyServiceServer(grpcServer, cmpHandler)
+
+		log.Info("grpc Server started on ", port)
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := grpcServer.Serve(listener); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
+	defer func() {
+		cancel()
+		grpcServer.GracefulStop()
+		if err != nil {
+			log.Errorf("can't stop server gracefully %v", err)
+		}
+	}()
+
+	conn, err := grpc.Dial(fmt.Sprintf(":%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	defer func(conn *grpc.ClientConn) {
+		err = conn.Close()
+		if err != nil {
+			log.Error(err)
+		}
+	}(conn)
+	if err != nil {
+		log.Fatalf("failed to establish connection \n %v", err)
+	}
+	companyClient = companyService.NewCompanyServiceClient(conn)
+
+	m.Run()
 	resources := []*dockertest.Resource{pgResoursce, redisRsc}
 	for _, resource := range resources {
 		if err := pool.Purge(resource); err != nil {
@@ -107,10 +142,9 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	os.Exit(code)
 }
 
-func ConsumeCompanies(redisClient *redis.Client, localCache *cache2.LocalCache) {
+func ConsumeCompanies(ctx context.Context, redisClient *redis.Client, localCache *cache2.LocalCache) {
 	redisCompanyConsumer := consumer.NewRedisCompanyConsumer(redisClient, fmt.Sprintf("%d000-0", time.Now().Unix()))
 	go redisCompanyConsumer.Consume(context.Background(), func(id uuid.UUID, action, name string) {
 		switch action {

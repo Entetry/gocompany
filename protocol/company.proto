@@ -1,0 +1,70 @@
+syntax = "proto3";
+option go_package = "./companyService";
+
+package proto;
+
+service CompanyService {
+  rpc GetAll(GetAllRequest) returns (GetAllResponse);
+  rpc GetByID(GetCompanyRequest) returns (GetCompanyResponse);
+  rpc Create(CreateCompanyRequest) returns (CreateCompanyResponse);
+  rpc Update(UpdateCompanyRequest) returns (UpdateCompanyResponse);
+  rpc Delete(DeleteCompanyRequest) returns (DeleteCompanyResponse);
+  rpc AddLogo(stream AddCompanyLogoRequest) returns (AddCompanyLogoResponse);
+}
+
+message GetAllRequest{
+}
+
+message GetAllResponse{
+  repeated GetCompanyResponse companies = 1;
+}
+
+message GetCompanyRequest{
+  string uuid = 1;
+}
+
+message GetCompanyResponse{
+  string uuid = 1;
+  string name = 2;
+}
+
+message AddCompanyRequest{
+  string name = 1;
+}
+
+message DeleteCompanyRequest{
+  string uuid = 1;
+}
+
+message DeleteCompanyResponse{
+
+}
+
+message UpdateCompanyRequest{
+  string uuid = 1 ;
+  string name = 2 ;
+}
+
+message UpdateCompanyResponse{
+
+}
+
+message CreateCompanyRequest{
+  string name = 1;
+}
+
+message CreateCompanyResponse{
+  string uuid = 1;
+}
+
+message AddCompanyLogoRequest{
+  oneof data{
+    string companyID = 1;
+  };
+  bytes imageChunk = 2;
+}
+
+
+message AddCompanyLogoResponse{
+
+}

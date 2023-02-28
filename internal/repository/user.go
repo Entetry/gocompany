@@ -12,6 +12,8 @@ import (
 	"github.com/Entetry/gocompany/internal/model"
 )
 
+var ErrNotFound = errors.New("Not found")
+
 // UserRepository user repository interface
 type UserRepository interface {
 	Create(ctx context.Context, username, pwdHash, email string) (uuid.UUID, error)
@@ -52,7 +54,7 @@ func (u *User) GetByUsername(ctx context.Context, username string) (*model.User,
 		`SELECT id, username, email, passwordHash FROM users WHERE username = $1`, username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return nil, ErrNotFound
 	}
 
 	if err != nil {

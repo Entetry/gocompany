@@ -1,11 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/Entetry/gocompany/internal/repository"
 	"io"
-	"mime/multipart"
 	"os"
 	"path/filepath"
 
@@ -19,18 +20,18 @@ import (
 )
 
 const (
-	companyAlreadyHasALogoErr = "company already has a logo"
-	fileSaveError             = "file save error"
+	ErrCompanyAlreadyHasALogo = "company already has a logo"
+	ErrFileSave               = "file save error"
 	imageExt                  = ".jpeg"
 )
 
 type CompanyService interface {
 	GetAll(ctx context.Context) ([]*model.Company, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Company, error)
-	Create(ctx context.Context, company *model.Company) (uuid.UUID, error)
-	Update(ctx context.Context, company *model.Company) error
+	Create(ctx context.Context, name string) (uuid.UUID, error)
+	Update(ctx context.Context, uuid uuid.UUID, name string) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	AddLogo(ctx context.Context, companyID string, file *multipart.FileHeader) error
+	AddLogo(ctx context.Context, companyID string, file []byte) error
 	GetLogo(ctx context.Context, companyID uuid.UUID) (string, error)
 }
 
@@ -52,14 +53,18 @@ func NewCompany(
 
 // GetAll return all companies
 func (c *Company) GetAll(ctx context.Context) ([]*model.Company, error) {
-	return c.companyRepository.GetAll(ctx)
+	cmps, err := c.companyRepository.GetAll(ctx)
+	if errors.Is(repository.ErrNotFound, err) {
+		return nil, nil
+	}
+	return cmps, err
 }
 
 // GetByID Retrieves company based on given ID
 func (c *Company) GetByID(ctx context.Context, id uuid.UUID) (*model.Company, error) {
 	company, err := c.cache.Read(id)
-	if err != nil {
-		log.Info(err)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, nil
 	}
 	if company != nil {
 		return company, nil
@@ -76,13 +81,13 @@ func (c *Company) GetByID(ctx context.Context, id uuid.UUID) (*model.Company, er
 }
 
 // Create  company
-func (c *Company) Create(ctx context.Context, company *model.Company) (uuid.UUID, error) {
-	return c.companyRepository.Create(ctx, company)
+func (c *Company) Create(ctx context.Context, name string) (uuid.UUID, error) {
+	return c.companyRepository.Create(ctx, name)
 }
 
 // Update update company
-func (c *Company) Update(ctx context.Context, company *model.Company) error {
-	return c.companyRepository.Update(ctx, company)
+func (c *Company) Update(ctx context.Context, uuid uuid.UUID, name string) error {
+	return c.companyRepository.Update(ctx, uuid, name)
 }
 
 // Delete delete company
@@ -98,8 +103,9 @@ func (c *Company) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // AddLogo add logo to a company( fails if company already has a logo)
-func (c *Company) AddLogo(ctx context.Context, companyID string, file *multipart.FileHeader) error {
+func (c *Company) AddLogo(ctx context.Context, companyID string, file []byte) error {
 	id, err := uuid.Parse(companyID)
+
 	if err != nil {
 		return err
 	}
@@ -108,12 +114,12 @@ func (c *Company) AddLogo(ctx context.Context, companyID string, file *multipart
 		return err
 	}
 	if logo != nil {
-		return fmt.Errorf(companyAlreadyHasALogoErr)
+		return fmt.Errorf(ErrCompanyAlreadyHasALogo)
 	}
 	imageURI := c.buildFileURI(companyID)
 	err = c.saveFile(imageURI, file)
 	if err != nil {
-		return fmt.Errorf(fileSaveError)
+		return fmt.Errorf(ErrFileSave)
 	}
 
 	err = c.logoRepository.Create(ctx, id, imageURI)
@@ -134,22 +140,15 @@ func (c *Company) GetLogo(ctx context.Context, companyID uuid.UUID) (string, err
 
 func (c *Company) buildFileURI(companyID string) string {
 	wd, _ := os.Getwd()
-	basepath := filepath.Join(wd, "data", "company")
+	basepath := filepath.Join(wd, "rsc")
 	_ = os.MkdirAll(basepath, os.ModePerm)
 	fileURI := filepath.Join(basepath, companyID)
 	return fmt.Sprintf("%s%s", fileURI, imageExt)
 }
 
-func (c *Company) saveFile(fileName string, file *multipart.FileHeader) error {
-	src, err := file.Open()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if srcError := src.Close(); srcError != nil {
-			log.Printf("Error closing file: %s\n", srcError)
-		}
-	}()
+func (c *Company) saveFile(fileName string, file []byte) error {
+
+	src := bytes.NewReader(file)
 
 	dst, err := os.Create(filepath.Clean(fileName))
 	if err != nil {
